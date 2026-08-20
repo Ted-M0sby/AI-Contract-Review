@@ -9,6 +9,7 @@ import fastapi
 import random
 import smtplib
 import os
+from html import escape
 from email.mime.text import MIMEText
 from email.header import Header
 from fastapi import FastAPI, Request
@@ -18,7 +19,7 @@ import fitz
 import requests
 from docx import Document
 from fastapi import FastAPI, Request, UploadFile, File, Form
-load_dotenv()
+load_dotenv(override=True)
 app = FastAPI()
 
 app.add_middleware(
@@ -42,6 +43,45 @@ def mysql():
     )
     return conn
 
+def send_review_done_email(to_email,contract_title,contract_id):
+    qq_email=os.getenv('QQ_EMAIL')
+    qq_auth_code=os.getenv('QQ_AUTH_CODE')
+    if not qq_email or not qq_auth_code or not to_email:
+        print('审查完成邮件未发送：邮箱配置或收件人缺失')
+        return False
+    safe_title=escape(contract_title or '合同')
+    safe_contract_id=escape(str(contract_id))
+    content=f"""
+    <div style="font-family:Arial,sans-serif;background:#f5f7fa;padding:30px;">
+        <div style="max-width:520px;margin:auto;background:#ffffff;border-radius:12px;padding:30px;box-shadow:0 4px 20px rgba(0,0,0,0.08);">
+            <h2 style="margin:0 0 20px;color:#1f2937;">合同审查系统</h2>
+            <p style="color:#4b5563;font-size:15px;">你好，你提交的合同已经完成 AI 审查。</p>
+            <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;padding:16px;margin:18px 0;">
+                <p style="margin:0 0 8px;color:#6b7280;font-size:14px;">合同名称</p>
+                <p style="margin:0;color:#1f2937;font-size:18px;font-weight:bold;">{safe_title}</p>
+                <p style="margin:12px 0 0;color:#6b7280;font-size:13px;">合同 ID：{safe_contract_id}</p>
+            </div>
+            <p style="color:#4b5563;font-size:15px;">请登录系统查看完整审查结果、风险条款和修改建议。</p>
+            <hr style="border:none;border-top:1px solid #e5e7eb;margin:25px 0;">
+            <p style="color:#9ca3af;font-size:12px;">如果不是你本人操作，请忽略此邮件。</p>
+        </div>
+    </div>
+    """
+    message=MIMEText(content,'html','utf-8')
+    message['From']=qq_email
+    message['To']=to_email
+    message['Subject']=Header('合同审查完成通知','utf-8')
+    try:
+        smtp=smtplib.SMTP_SSL('smtp.qq.com',465,timeout=20)
+        smtp.login(qq_email,qq_auth_code)
+        result=smtp.sendmail(qq_email,[to_email],message.as_string())
+        print('审查完成邮件发送结果：',result)
+        smtp.quit()
+        return True
+    except Exception as e:
+        print('审查完成邮件发送失败：',e)
+        return False
+
 class EmailData(BaseModel):
     email:str
 
@@ -57,6 +97,9 @@ class LoginData(BaseModel):
 class ReviewData(BaseModel):
     user_id:int
     review_perspective:str='neutral'
+
+class DingTalkData(BaseModel):
+    user_id:int
 
 @app.post('/auth/send-code')
 async def send_code(data:EmailData):
@@ -243,6 +286,9 @@ async def review_contract(contract_id:int,data:ReviewData):
         cursor.close()
         conn.close()
         return {'code':404,'message':'合同不存在'}
+    cursor.execute('SELECT email FROM users WHERE id=%s',(data.user_id,))
+    user=cursor.fetchone()
+    user_email=user['email'] if user else None
     if contract['cleaned_text']:
         contract_text=contract['cleaned_text']
     else:
@@ -292,6 +338,7 @@ async def review_contract(contract_id:int,data:ReviewData):
         overall_risk=review_result.get('overall_risk','low')
         cursor.execute('UPDATE contracts SET status=%s,overall_risk=%s,review_result=%s,review_error=NULL,reviewed_at=NOW() WHERE id=%s AND user_id=%s',('reviewed',overall_risk,json.dumps(review_result,ensure_ascii=False),contract_id,data.user_id))
         conn.commit()
+        send_review_done_email(user_email,contract['title'],contract_id)
         cursor.close()
         conn.close()
         return {'code':200,'message':'合同审查成功','contract_id':contract_id,'status':'reviewed','data':review_result}
@@ -331,6 +378,63 @@ async def get_contract_review(contract_id:int,user_id:int):
         'data':result
     }
 
+
+@app.post('/contracts/{contract_id}/dingtalk')
+async def send_contract_dingtalk(contract_id:int,data:DingTalkData):
+    conn=mysql()
+    cursor=conn.cursor()
+    cursor.execute('SELECT id,title,status,overall_risk,review_result FROM contracts WHERE id=%s AND user_id=%s',(contract_id,data.user_id))
+    contract=cursor.fetchone()
+    cursor.close()
+    conn.close()
+    if not contract:
+        return {'code':404,'message':'合同不存在'}
+    if contract['status']!='reviewed' or not contract['review_result']:
+        return {'code':400,'message':'合同还没有完成AI审查'}
+    try:
+        review_result=json.loads(contract['review_result'])
+        risks=review_result.get('risks',[])
+        risk_text=''
+        for i,item in enumerate(risks[:3]):
+            risk_text=risk_text+str(i+1)+'. 【'+item.get('risk_level','')+'】'+item.get('title','')+'\n'
+            risk_text=risk_text+'原因：'+item.get('reason','')+'\n\n'
+        if not risk_text:
+            risk_text='未发现明确风险项'
+        content='''### AI合同审查人工复核提醒
+
+**合同名称：** '''+contract['title']+'''
+
+**综合风险：** '''+str(contract['overall_risk'])+'''
+
+**主要风险：**
+
+'''+risk_text+'''
+
+**AI审查总结：**
+
+'''+review_result.get('review_summary','')+'''
+
+> 本结果由AI生成，仅用于辅助审查，请结合实际情况进行人工复核。
+'''
+        webhook=os.getenv('DINGTALK_WEBHOOK')
+        response=requests.post(
+            webhook,
+            headers={'Content-Type':'application/json'},
+            json={
+                'msgtype':'markdown',
+                'markdown':{
+                    'title':'AI合同审查人工复核提醒',
+                    'text':content
+                }
+            },
+            timeout=10
+        )
+        result=response.json()
+        if result.get('errcode')!=0:
+            return {'code':500,'message':'钉钉发送失败','error':result}
+        return {'code':200,'message':'已发送至钉钉群'}
+    except Exception as e:
+        return {'code':500,'message':'钉钉发送失败','error':str(e)}
 
 if __name__ == "__main__":
     uvicorn.run(

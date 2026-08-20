@@ -34,6 +34,7 @@ onMounted(async () => {
 async function handleStartReview() {
   if (!contract.value) return
 
+  const previousStatus = contract.value.status
   reviewing.value = true
   error.value = ''
   contract.value.status = 'reviewing'
@@ -46,6 +47,9 @@ async function handleStartReview() {
     }
     contract.value.status = 'reviewed'
     router.push(`/contracts/${contract.value.id}/review`)
+  } catch (requestError) {
+    contract.value.status = previousStatus
+    error.value = requestError.message || '发起审查失败，请稍后重试'
   } finally {
     reviewing.value = false
   }
@@ -94,7 +98,7 @@ async function handleStartReview() {
             <dd>{{ contract.original_filename || contract.file_name }}</dd>
           </div>
         </dl>
-        <p v-if="reviewing" class="reviewing-note">AI 正在审查合同，预计约 2 秒后进入结果页。</p>
+        <p v-if="reviewing" class="reviewing-note">AI 正在审查合同，请等待结果生成。</p>
         <p v-if="error" class="form-error">{{ error }}</p>
       </aside>
 

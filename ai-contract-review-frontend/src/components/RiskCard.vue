@@ -17,6 +17,18 @@ const riskMap = {
 
 const levelText = computed(() => riskMap[props.risk.risk_level] || props.risk.risk_level)
 const confidenceText = computed(() => `${Math.round((props.risk.confidence || 0) * 100)}%`)
+const evidenceSourceText = computed(() => {
+  const sources = (props.risk.evidence || [])
+    .map((item) => item.source_name || item.source_type)
+    .filter(Boolean)
+  const uniqueSources = [...new Set(sources)]
+
+  if (uniqueSources.length <= 3) {
+    return uniqueSources.join('、')
+  }
+
+  return `${uniqueSources.slice(0, 3).join('、')} 等 ${uniqueSources.length} 个来源`
+})
 </script>
 
 <template>
@@ -51,15 +63,7 @@ const confidenceText = computed(() => `${Math.round((props.risk.confidence || 0)
 
     <div class="risk-footer">
       <span>AI 置信度：{{ confidenceText }}</span>
-      <span v-if="risk.evidence?.length">参考依据：{{ risk.evidence.length }} 条</span>
-    </div>
-
-    <div v-if="risk.evidence?.length" class="evidence-list">
-      <div v-for="item in risk.evidence" :key="`${item.source_name}-${item.relevance}`" class="evidence-item">
-        <strong>{{ item.source_name }}</strong>
-        <span>{{ item.source_type }} · 相关度 {{ Math.round(item.relevance * 100) }}%</span>
-        <p>{{ item.content }}</p>
-      </div>
+      <span v-if="evidenceSourceText">来源：{{ evidenceSourceText }}</span>
     </div>
   </article>
 </template>

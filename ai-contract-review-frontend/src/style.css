@@ -642,6 +642,13 @@ svg {
   overflow-wrap: anywhere;
 }
 
+.header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 9px;
+}
+
 .content-band {
   width: 100%;
 }
@@ -1289,34 +1296,6 @@ dd {
   font-weight: 650;
 }
 
-.evidence-list {
-  display: grid;
-  gap: 8px;
-  margin-top: 14px;
-  border-top: 1px solid var(--line);
-  padding-top: 14px;
-}
-
-.evidence-item {
-  display: grid;
-  gap: 4px;
-  border-radius: 6px;
-  padding: 12px;
-  border-left: 3px solid var(--teal);
-  background: var(--teal-soft);
-}
-
-.evidence-item span {
-  color: var(--muted);
-  font-size: 12px;
-}
-
-.evidence-item p {
-  margin: 0;
-  color: var(--text-soft);
-  line-height: 1.65;
-}
-
 .review-subsection {
   display: grid;
   gap: 10px;
@@ -1502,6 +1481,7 @@ dd {
   .page-header,
   .contract-card-main,
   .risk-card-header,
+  .header-actions,
   .card-actions,
   .form-actions,
   .list-toolbar {

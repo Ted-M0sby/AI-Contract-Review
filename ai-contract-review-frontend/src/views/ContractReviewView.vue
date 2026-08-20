@@ -1,8 +1,8 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ArrowLeft, FileText, ShieldCheck } from '@lucide/vue'
-import { getContract, getReview } from '../api/contract'
+import { ArrowLeft, FileText, Send, ShieldCheck } from '@lucide/vue'
+import { getContract, getReview, sendContractDingTalk } from '../api/contract'
 import RiskCard from '../components/RiskCard.vue'
 
 const route = useRoute()
@@ -10,6 +10,10 @@ const router = useRouter()
 const contract = ref(null)
 const review = ref(null)
 const loading = ref(true)
+const error = ref('')
+const dingtalkLoading = ref(false)
+const dingtalkMessage = ref('')
+const dingtalkError = ref('')
 
 const riskMap = {
   high: '高风险',
@@ -33,18 +37,44 @@ const counts = computed(() => {
 })
 
 onMounted(async () => {
-  const [contractResponse, reviewResponse] = await Promise.all([
-    getContract(route.params.id),
-    getReview(route.params.id),
-  ])
-  contract.value = contractResponse.data
-  review.value = reviewResponse.data
-  loading.value = false
+  try {
+    const [contractResponse, reviewResponse] = await Promise.all([
+      getContract(route.params.id),
+      getReview(route.params.id),
+    ])
+    contract.value = contractResponse.data
+    review.value = reviewResponse.data
+  } catch (requestError) {
+    error.value = requestError.message || 'AI 审查结果加载失败，请稍后重试'
+  } finally {
+    loading.value = false
+  }
 })
+
+async function handleSendDingTalk() {
+  if (!contract.value) return
+
+  dingtalkLoading.value = true
+  dingtalkMessage.value = ''
+  dingtalkError.value = ''
+
+  try {
+    const response = await sendContractDingTalk(contract.value.id)
+    dingtalkMessage.value = response.message || '已发送至钉钉群'
+  } catch (requestError) {
+    dingtalkError.value = requestError.message || '钉钉发送失败，请稍后重试'
+  } finally {
+    dingtalkLoading.value = false
+  }
+}
 </script>
 
 <template>
   <div v-if="loading" class="empty-state">正在加载 AI 审查结果...</div>
+  <div v-else-if="error" class="empty-state">
+    <p class="form-error">{{ error }}</p>
+    <button class="button button-secondary" type="button" @click="router.push('/contracts')">返回合同列表</button>
+  </div>
   <div v-else-if="!contract || !review" class="empty-state">未找到审查结果</div>
   <template v-else>
     <section class="page-header">
@@ -53,8 +83,16 @@ onMounted(async () => {
         <h1>{{ contract.title }}</h1>
         <p>{{ review.contract_type_name }} · AI 类型置信度 {{ Math.round(review.contract_confidence * 100) }}%</p>
       </div>
-      <button class="button button-secondary" type="button" @click="router.push(`/contracts/${contract.id}`)"><ArrowLeft />返回详情</button>
+      <div class="header-actions">
+        <button class="button button-accent" type="button" :disabled="dingtalkLoading" @click="handleSendDingTalk">
+          <Send v-if="!dingtalkLoading" />{{ dingtalkLoading ? '发送中...' : '发送钉钉复核' }}
+        </button>
+        <button class="button button-secondary" type="button" @click="router.push(`/contracts/${contract.id}`)"><ArrowLeft />返回详情</button>
+      </div>
     </section>
+
+    <p v-if="dingtalkMessage" class="form-message">{{ dingtalkMessage }}</p>
+    <p v-if="dingtalkError" class="form-error">{{ dingtalkError }}</p>
 
     <section class="review-summary">
       <div class="summary-main">

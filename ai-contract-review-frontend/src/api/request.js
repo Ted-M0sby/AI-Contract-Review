@@ -1,7 +1,8 @@
 import $ from 'jquery'
 
-const DEFAULT_API_BASE_URL = import.meta.env.DEV ? '/api' : 'http://192.168.31.37:8888'
+const DEFAULT_API_BASE_URL = import.meta.env.DEV ? '/api' : 'http://127.0.0.1:8888'
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || DEFAULT_API_BASE_URL).replace(/\/$/, '')
+const API_TIMEOUT = 900000
 
 function getValidationMessage(detail) {
   if (typeof detail === 'string') {
@@ -18,7 +19,7 @@ function getValidationMessage(detail) {
 export function apiRequest(options) {
   return new Promise((resolve, reject) => {
     $.ajax({
-      timeout: 20000,
+      timeout: API_TIMEOUT,
       dataType: 'json',
       ...options,
       url: `${API_BASE_URL}${options.url}`,

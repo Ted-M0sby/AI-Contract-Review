@@ -2,13 +2,10 @@ import os
 import requests
 import pymysql
 from dotenv import load_dotenv
-
 load_dotenv()
-
 RAGFLOW_BASE_URL=os.getenv('RAGFLOW_BASE_URL')
 RAGFLOW_API_KEY=os.getenv('RAGFLOW_API_KEY')
 DATASET_ID='5a4db3b89bd011f18665e129ebabeb38'
-
 def mysql():
     conn=pymysql.connect(
         host='127.0.0.1',
@@ -20,7 +17,6 @@ def mysql():
         cursorclass=pymysql.cursors.DictCursor
     )
     return conn
-
 if __name__=="__main__":
     conn=mysql()
     cursor=conn.cursor()
@@ -30,13 +26,11 @@ if __name__=="__main__":
     export_dir='ragflow/contracts'
     if not os.path.exists(export_dir):
         os.makedirs(export_dir)
-
     headers={
         'Authorization':'Bearer '+RAGFLOW_API_KEY
     }
     upload_url=RAGFLOW_BASE_URL+'/api/v1/datasets/'+DATASET_ID+'/documents'
     document_ids=[]
-
     for item in contracts:
         filename=str(item['id'])+'_'+item['title']+'.txt'
         file_path=os.path.join(export_dir,filename)

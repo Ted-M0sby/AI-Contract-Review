@@ -1,10 +1,5 @@
 import { apiRequest } from './request'
-import { createContract, readContracts, upsertContract } from '../mock/contracts'
-import { mockReview } from '../mock/review'
-
-function wait(ms = 300) {
-  return new Promise((resolve) => window.setTimeout(resolve, ms))
-}
+import { createContract, upsertContract } from '../mock/contracts'
 
 export async function getContracts() {
   const userId = localStorage.getItem('user_id')
@@ -92,26 +87,64 @@ export async function getContract(id) {
 }
 
 export async function startReview(id) {
-  const contract = readContracts().find((item) => String(item.id) === String(id))
-  if (!contract) {
-    return { code: 404, message: '合同不存在' }
+  const userId = localStorage.getItem('user_id')
+  if (!userId) {
+    throw new Error('登录状态已失效，请重新登录')
   }
 
-  upsertContract({ ...contract, status: 'reviewing' })
-  await wait(2000)
-  upsertContract({ ...contract, status: 'reviewed', overall_risk: mockReview.overall_risk })
+  const response = await apiRequest({
+    url: `/contracts/${encodeURIComponent(id)}/review`,
+    type: 'POST',
+    contentType: 'application/json; charset=UTF-8',
+    data: JSON.stringify({
+      user_id: Number(userId),
+      review_perspective: 'neutral',
+    }),
+  })
+
+  const responseData = response.data || null
+  upsertContract({
+    id,
+    status: response.status || 'reviewed',
+    overall_risk: response.overall_risk || responseData?.overall_risk || null,
+  })
 
   return {
-    code: 200,
-    data: mockReview,
+    ...response,
+    data: responseData,
   }
 }
 
 export async function getReview(id) {
-  await wait()
-  const contract = readContracts().find((item) => String(item.id) === String(id))
-  return {
-    code: contract ? 200 : 404,
-    data: contract ? mockReview : null,
+  const userId = localStorage.getItem('user_id')
+  if (!userId) {
+    throw new Error('登录状态已失效，请重新登录')
   }
+
+  const response = await apiRequest({
+    url: `/contracts/${encodeURIComponent(id)}/review`,
+    type: 'GET',
+    data: { user_id: userId },
+  })
+
+  return {
+    ...response,
+    data: response.data || null,
+  }
+}
+
+export async function sendContractDingTalk(id) {
+  const userId = localStorage.getItem('user_id')
+  if (!userId) {
+    throw new Error('登录状态已失效，请重新登录')
+  }
+
+  return apiRequest({
+    url: `/contracts/${encodeURIComponent(id)}/dingtalk`,
+    type: 'POST',
+    contentType: 'application/json; charset=UTF-8',
+    data: JSON.stringify({
+      user_id: Number(userId),
+    }),
+  })
 }
