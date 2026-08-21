@@ -2,17 +2,17 @@ import os
 import requests
 import pymysql
 from dotenv import load_dotenv
-load_dotenv()
+load_dotenv(override=True)
 RAGFLOW_BASE_URL=os.getenv('RAGFLOW_BASE_URL')
 RAGFLOW_API_KEY=os.getenv('RAGFLOW_API_KEY')
 DATASET_ID='5a4db3b89bd011f18665e129ebabeb38'
 def mysql():
     conn=pymysql.connect(
-        host='127.0.0.1',
-        user='root',
-        password='Aa123456',
-        database='contract',
-        port=3306,
+        host=os.getenv('MYSQL_HOST','127.0.0.1'),
+        user=os.getenv('MYSQL_USER','root'),
+        password=os.getenv('MYSQL_PASSWORD',''),
+        database=os.getenv('MYSQL_DATABASE','contract'),
+        port=int(os.getenv('MYSQL_PORT','3306')),
         charset='utf8mb4',
         cursorclass=pymysql.cursors.DictCursor
     )

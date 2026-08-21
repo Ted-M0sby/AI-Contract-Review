@@ -30,9 +30,12 @@ async function handleLogin() {
       throw new Error('登录成功，但后端未返回 user_id')
     }
 
+    const role = response.role || response.data?.role || 'user'
+    const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : ''
     localStorage.setItem('user_id', String(userId))
     localStorage.setItem('email', response.email || response.data?.email || form.value.email)
-    await router.push(route.query.redirect || '/contracts')
+    localStorage.setItem('role', role)
+    await router.push(role === 'admin' ? (redirect.startsWith('/admin') ? redirect : '/admin') : (redirect && !redirect.startsWith('/admin') ? redirect : '/contracts'))
   } catch (requestError) {
     error.value = requestError.message || '登录失败，请稍后重试'
   } finally {
@@ -46,7 +49,7 @@ async function handleLogin() {
     <section class="auth-panel">
       <div class="auth-copy">
         <div class="auth-identity"><span><ShieldCheck /></span><strong>智审合同</strong></div>
-        <span class="eyebrow">AI 合同审查 Demo</span>
+        <span class="eyebrow">AI 合同审查</span>
         <p>面向房屋租赁合同的风险识别、条款核查与修改建议工作台。</p>
       </div>
 

@@ -84,7 +84,7 @@ onBeforeUnmount(() => {
     <section class="auth-panel">
       <div class="auth-copy">
         <div class="auth-identity"><span><ShieldCheck /></span><strong>智审合同</strong></div>
-        <span class="eyebrow">创建 Demo 账号</span>
+        <span class="eyebrow">创建账号</span>
         <h1>用 QQ 邮箱完成账号注册</h1>
         <p>验证码由真实后端发送，注册成功后即可登录合同工作台。</p>
       </div>

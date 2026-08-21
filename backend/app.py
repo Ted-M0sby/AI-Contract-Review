@@ -35,7 +35,7 @@ def mysql():
     conn = pymysql.connect(
         host='127.0.0.1',
         user='root',
-        password='Aa123456',
+        password=os.getenv('MYSQL_PASSWORD', ''),
         database='contract',  # 库名
         port=3306,
         charset='utf8mb4',
@@ -183,7 +183,46 @@ async def login(data:LoginData):
     conn.close()
     if not user:
         return {'code':400,'message':'邮箱或密码错误'}
-    return {'code':200,'message':'登录成功','user_id':user['id'],'email':user['email']}
+    return {'code':200,'message':'登录成功','user_id':user['id'],'email':user['email'],'role':user.get('role','user')}
+
+@app.get('/admin/overview')
+async def get_admin_overview(user_id:int):
+    conn=mysql()
+    cursor=conn.cursor()
+    cursor.execute('SELECT id,email,role FROM users WHERE id=%s',(user_id,))
+    user=cursor.fetchone()
+    if not user:
+        cursor.close()
+        conn.close()
+        return {'code':404,'message':'用户不存在'}
+    if user.get('role')!='admin':
+        cursor.close()
+        conn.close()
+        return {'code':403,'message':'没有管理员权限'}
+    cursor.execute('SELECT COUNT(*) AS total FROM users')
+    user_count=cursor.fetchone()['total']
+    cursor.execute('SELECT COUNT(*) AS total FROM contracts')
+    contract_count=cursor.fetchone()['total']
+    cursor.execute('SELECT status,COUNT(*) AS total FROM contracts GROUP BY status')
+    status_rows=cursor.fetchall()
+    status_stats={'pending':0,'reviewing':0,'reviewed':0,'failed':0}
+    for item in status_rows:
+        status_stats[item['status']]=item['total']
+    cursor.execute('SELECT overall_risk,COUNT(*) AS total FROM contracts WHERE overall_risk IS NOT NULL GROUP BY overall_risk')
+    risk_rows=cursor.fetchall()
+    risk_stats={'high':0,'medium':0,'low':0}
+    for item in risk_rows:
+        risk_stats[item['overall_risk']]=item['total']
+    cursor.execute('''SELECT c.id,c.title,c.contract_type,c.status,c.overall_risk,c.created_at,u.email AS user_email
+    FROM contracts c LEFT JOIN users u ON c.user_id=u.id
+    ORDER BY c.id DESC LIMIT 20''')
+    contracts=cursor.fetchall()
+    cursor.close()
+    conn.close()
+    for item in contracts:
+        if item['contract_type']=='housing_lease':
+            item['contract_type_name']='房屋租赁合同'
+    return {'code':200,'message':'查询成功','data':{'user_count':user_count,'contract_count':contract_count,'status_stats':status_stats,'risk_stats':risk_stats,'recent_contracts':contracts}}
 
 @app.post('/contracts/upload')
 async def upload_contract(user_id:int=Form(...),title:str=Form(...),contract_type:str=Form(...),file:UploadFile=File(...)):

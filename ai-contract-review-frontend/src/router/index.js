@@ -6,13 +6,20 @@ import ContractListView from '../views/ContractListView.vue'
 import ContractUploadView from '../views/ContractUploadView.vue'
 import ContractDetailView from '../views/ContractDetailView.vue'
 import ContractReviewView from '../views/ContractReviewView.vue'
+import AdminDashboardView from '../views/AdminDashboardView.vue'
 
 const router = createRouter({
   history: createWebHistory(),
   routes: [
     {
       path: '/',
-      redirect: () => (localStorage.getItem('user_id') ? '/contracts' : '/login'),
+      redirect: () => {
+        if (!localStorage.getItem('user_id')) {
+          return '/login'
+        }
+
+        return localStorage.getItem('role') === 'admin' ? '/admin' : '/contracts'
+      },
     },
     {
       path: '/login',
@@ -51,6 +58,12 @@ const router = createRouter({
           name: 'contract-review',
           component: ContractReviewView,
         },
+        {
+          path: 'admin',
+          name: 'admin',
+          component: AdminDashboardView,
+          meta: { requiresAdmin: true },
+        },
       ],
     },
   ],
@@ -58,6 +71,7 @@ const router = createRouter({
 
 router.beforeEach((to) => {
   const isLoggedIn = Boolean(localStorage.getItem('user_id'))
+  const role = localStorage.getItem('role') || 'user'
 
   if (to.meta.requiresAuth && !isLoggedIn) {
     return {
@@ -66,8 +80,12 @@ router.beforeEach((to) => {
     }
   }
 
-  if ((to.name === 'login' || to.name === 'register') && isLoggedIn) {
+  if (to.meta.requiresAdmin && role !== 'admin') {
     return '/contracts'
+  }
+
+  if ((to.name === 'login' || to.name === 'register') && isLoggedIn) {
+    return role === 'admin' ? '/admin' : '/contracts'
   }
 
   return true
